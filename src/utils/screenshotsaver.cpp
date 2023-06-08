@@ -27,6 +27,13 @@
 #include "src/widgets/capture/capturewidget.h"
 #endif
 
+#if USE_WL_COPY
+#include <array>
+#include <unistd.h>
+#include <fcntl.h>
+#include <wait.h>
+#endif
+
 bool saveToFilesystem(const QPixmap& capture,
                       const QString& path,
                       const QString& messagePrefix)
@@ -90,6 +97,45 @@ QString ShowSaveFileDialog(const QString& title, const QString& directory)
     }
 }
 
+static void logErr(std::string const &name) {
+    constexpr size_t ERRBUF_LEN = 64;
+
+    std::array<char, ERRBUF_LEN> errbuf {};
+    strerror_r(errno, errbuf.data(), errbuf.size());
+    AbstractLogger::error() << ("wl_copy: " + name + ": ").data() << errbuf.data();
+}
+
+static void saveToClipboardWlCopy(const QByteArray& array, const QString& imageType) {
+    if (imageType != "png") {
+        AbstractLogger::error() << "WL_COPY option only supports png";
+        return;
+    }
+
+    std::array<int, 2> pipefds {};
+    if (pipe2(pipefds.data(), O_CLOEXEC) == -1) {
+        logErr("pipe2");
+    }
+
+    int pid = fork();
+    if (pid == -1) {
+        logErr("fork");
+    }
+    if (pid == 0) {
+        // child, close input fd
+        close(pipefds[1]);
+        if (dup2(pipefds[0], STDIN_FILENO) == -1) {
+            logErr("dup2");
+        }
+        close(pipefds[0]);
+        execlp("wl-copy", "wl-copy", "-t", "image/png", NULL);
+    }
+
+    close(pipefds[0]);
+    write(pipefds[1], array.data(), array.size());
+    close(pipefds[1]);
+    waitpid(pid, nullptr, 0);
+}
+
 void saveToClipboardMime(const QPixmap& capture, const QString& imageType)
 {
     QByteArray array;
@@ -103,10 +149,13 @@ void saveToClipboardMime(const QPixmap& capture, const QString& imageType)
                                    array.size(),
                                    imageType.toUpper().toUtf8());
     if (isLoaded) {
-
         auto* mimeData = new QMimeData();
 
-#ifdef USE_WAYLAND_CLIPBOARD
+#ifdef USE_WL_COPY
+        auto *bytes = array.data();
+        saveToClipboardWlCopy(array, imageType);
+#elif defined(USE_WAYLAND_CLIPBOARD)
+        AbstractLogger::info() << "wl_wayland_copy";
         mimeData->setImageData(formattedPixmap.toImage());
         mimeData->setData(QStringLiteral("x-kde-force-image-copy"),
                           QByteArray());
