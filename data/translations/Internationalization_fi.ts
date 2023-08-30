@@ -1892,7 +1892,7 @@ Ratkaise ne käsin muuttamalla asetustiedostoa.</translation>
     <message>
         <location filename="../../src/main.cpp" line="219"/>
         <source>Print geometry of the selection in the format WxH+X+Y. Does nothing if raw is specified</source>
-        <translation>Tulosta valinta sivuasetuksilla muodossa L K X Y. Ei tee mitään, jos raaka on määritetty</translation>
+        <translation>Tulosta valinta sivuasetuksilla muodossa LxK+X+Y. Ei tee mitään, jos raaka on määritetty</translation>
     </message>
     <message>
         <location filename="../../src/main.cpp" line="223"/>
